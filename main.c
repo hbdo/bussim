@@ -6,12 +6,11 @@
 #define MATCH(s) (!strcmp(argv[ac], (s)))
 #define PERIOD 5.0
 
-int NUM_PASS, NUM_AGENTS;
-int NUM_TOURS = 1;
-int NUM_SEATS = 10;
-int NUM_DAYS = 4;
-int SEED = 1;
-double START_TIME = 0.0;
+typedef struct _ticket {
+    int seat;
+    int tour;
+    struct _ticket* next;
+} ticket_t;
 
 typedef struct _reserve_t {
     double time; // When ticket is reserved. 0 if reserved slot is available
@@ -22,7 +21,7 @@ typedef struct _reserve_t {
 typedef struct _pass_data_t {
     int thrid;
     reserve_t reserveds[2];
-    bool isRunning;
+    int isRunning;
     /*
     * Add important data of threads
     */
@@ -35,6 +34,21 @@ typedef struct _agent_data_t {
     * Add important data of threads
     */
 } agent_data_t;
+
+int NUM_PASS, NUM_AGENTS;
+int NUM_TOURS = 1;
+int NUM_SEATS = 10;
+int NUM_DAYS = 4;
+int SEED = 1;
+double START_TIME = 0.0;
+
+pthread_t *PASSENGERS;
+pthread_t *AGENTS;
+pass_data_t *pass_data;
+agent_data_t *agent_data;
+pthread_mutex_t *passlocks;
+pthread_mutex_t **seatlocks;
+int **BUSES; // A seat is accesible via BUSES[tour_id][seat_id]
 
 static const double kMicro = 1.0e-6;
 double get_time() {
@@ -55,10 +69,11 @@ void *pass_func(void* arg){
 
     while(get_time() - START_TIME <= NUM_DAYS*PERIOD){
         if(action <= 40){ // RESERVE
-            
+
         } else if(action <= 60){ // CANCEL
+            
             for(int i =0; i<2; i++){
-                if(!(thr_data->reserveds[i])){
+                if(!(thr_data->reserveds[i].time == 0.0)){
                     thr_data->reserveds[i].time = 0;
                     BUSES[thr_data->reserveds[i].tour][thr_data->reserveds[i].seat] = 0;
                     break;
@@ -72,11 +87,13 @@ void *pass_func(void* arg){
     }
     
     printf("Passenger %d has finished running\n", thr_data->thrid);
-    exit(0);
+    
 }
 
 void *agent_func(void* arg){
     agent_data_t* thr_data = (agent_data_t*) arg;
+    int action = rand() % 100;
+    int bus = rand() % NUM_TOURS;
 
     if(action <= 40){
 
@@ -89,7 +106,7 @@ void *agent_func(void* arg){
     }
 
     printf("Agent %d is running\n", thr_data->thrid);
-    exit(0);
+   
 }
 
 int main(int argc, char** argv){
@@ -121,13 +138,22 @@ int main(int argc, char** argv){
 
     srand((unsigned) SEED);
 
-    pthread_t PASSENGERS[NUM_PASS];
-    pthread_t AGENTS[NUM_AGENTS];
-    pass_data_t pass_data[NUM_PASS];
-    agent_data_t agent_data[NUM_AGENTS];
+    PASSENGERS = (pthread_t*) malloc(sizeof(pthread_t) * NUM_PASS);
+    AGENTS = (pthread_t*) malloc(sizeof(pthread_t) * NUM_AGENTS);
+    pass_data = (pass_data_t*) malloc(sizeof(pass_data_t) * NUM_PASS);
+    agent_data = (agent_data_t*) malloc(sizeof(agent_data_t) * NUM_AGENTS);
 
-    // A seat is accesible via BUSES[tour_id][seat_id]
-    int BUSES[NUM_TOURS][NUM_SEATS];
+    BUSES = (int**) malloc(sizeof(int*) * NUM_TOURS);
+    for(int i =0; i< NUM_TOURS; i++){
+        BUSES[i] = (int*) malloc(sizeof(int) * NUM_SEATS);
+    }
+
+    passlocks = (pthread_mutex_t*) malloc(sizeof(pthread_mutex_t) * NUM_PASS);
+    seatlocks = (pthread_mutex_t**) malloc(sizeof(pthread_mutex_t*) * NUM_TOURS);
+    for(int i =0; i< NUM_TOURS; i++){
+        seatlocks[i] = (pthread_mutex_t*) malloc(sizeof(pthread_mutex_t) * NUM_SEATS);
+    }
+
     int current_day = 1;
     START_TIME = get_time();
 
@@ -145,10 +171,10 @@ int main(int argc, char** argv){
     while(current_day <= NUM_DAYS){
         while(get_time() - START_TIME <= current_day*PERIOD){
             // Cancle invalid reserved tickets
-            for(int i = 0; i < NUM_PASSENGERS){
+            for(int i = 0; i < NUM_PASS; i++){
                 for(int j = 0; j < 2; j++){
                     if(pass_data[i].reserveds[j].time - get_time() > PERIOD){
-                        reserved_t res = pass_data[i].reserveds[j];
+                        reserve_t res = pass_data[i].reserveds[j];
                         res.time = 0;
                         BUSES[res.tour][res.seat] = 0;
                         /*
