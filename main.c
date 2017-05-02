@@ -18,7 +18,7 @@ typedef struct _ticket {
     int tour;
     struct _ticket* next;
 } ticket_t;
-
+// HELLO
 void addTicket(pass_data_t *p, int s, int t){
     ticket_t *newTicket = (ticket_t*) malloc(sizeof(ticket_t));
     newTicket->seat = s;
