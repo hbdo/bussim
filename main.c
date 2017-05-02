@@ -13,6 +13,30 @@ int NUM_DAYS = 4;
 int SEED = 1;
 double START_TIME = 0.0;
 
+typedef struct _ticket {
+    int seat;
+    int tour;
+    struct _ticket* next;
+} ticket_t;
+
+void addTicket(pass_data_t *p, int s, int t){
+    ticket_t *newTicket = (ticket_t*) malloc(sizeof(ticket_t));
+    newTicket->seat = s;
+    newTicket->tour = t;
+    newTicket->next = p->tickets;
+    p->tickets = newTicket;
+}
+
+void removeTicket(pass_data_t *p){
+    if(p->tickets != NULL){
+        ticket_t *newT = NULL;
+        newT->next = p->tickets->next;
+        newT->seat = p->tickets->seat;
+        newT->tour = p->tickets->tour;
+        p->tickets = newT;
+    }
+}
+
 typedef struct _reserve_t {
     double time; // When ticket is reserved. 0 if reserved slot is available
     int tour;
@@ -23,6 +47,7 @@ typedef struct _pass_data_t {
     int thrid;
     reserve_t reserveds[2];
     bool isRunning;
+    ticket_t *tickets;
     /*
     * Add important data of threads
     */
