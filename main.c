@@ -8,7 +8,10 @@
 
 FILE *logSummary = fopen("summaryLog.txt", "w");
 FILE *logAll = fopen("allLog.txt","w");
-//LOG FILES 
+//LOG FILES
+fprintf(logAll,"TIME\t P_ID\t A_ID\t Operation\t Seat No\t Tour No\n");
+
+
 typedef struct _ticket {
     int seat;
     int tour;
@@ -103,7 +106,7 @@ void *pass_func(void* arg){
                                 thr_data->reserveds[slot].seat = i;
                                 pthread_mutex_unlock(&(seatlocks[bus][i]));
                                 // LOG RESERVATION ACTION HERE
-                                fprintf(logAll, "The passenger %d reserved seat %d from tour %d.\n",thr_data->thrid,i,bus);
+                                fprintf(logAll, "%d\t %d\t %d\t R\t %d\t %d\n",getthr_data->thrid,i,bus);
                                 break; // Exit the search of a seat if reservation is done
                             }
                         }
@@ -306,6 +309,6 @@ int main(int argc, char** argv){
     for(int i=0; i<NUM_AGENTS;i++){
         pthread_join(AGENTS[i], NULL);
     }
-
+    
     return 0;
 }
