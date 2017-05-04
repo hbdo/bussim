@@ -133,7 +133,7 @@ void *pass_func(void* arg){
                     BUSES[thr_data->reserveds[i].tour][thr_data->reserveds[i].seat] = 0;
                     pthread_mutex_unlock(&passlocks[thr_data->thrid]);
                     isCancelled = 1;
-                    fprintf(logAll,"%d\t %d\t 0\t C\t %d\t %d\n",get_time()-START?TIME,thr_data->thrid,thr_data->reserveds[i].seat,thr_data->reserveds[i].tour+1);
+                    fprintf(logAll,"%d\t %d\t 0\t C\t %d\t %d\n",get_time()-START_TIME,thr_data->thrid,thr_data->reserveds[i].seat,thr_data->reserveds[i].tour+1);
                     break;
                 }
             }
