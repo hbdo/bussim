@@ -125,7 +125,7 @@ void *pass_func(void* arg){
             }
         } else if(action <= 80){ // VIEW
             // WHAT TO DO
-            
+            fprintf(logAll,"The passenger %d viewed.\n",thr_data->thrid);
         } else { // BUY
 
         }
