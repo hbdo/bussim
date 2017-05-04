@@ -115,7 +115,7 @@ void *pass_func(void* arg){
                                 thr_data->reserveds[slot].seat = i;
                                 pthread_mutex_unlock(&(seatlocks[bus][i]));
                                 // LOG RESERVATION ACTION HERE
-                                fprintf(logAll, "%d\t %d\t 0\t R\t %d\t %d\n",get_time()-START_TIME,thr_data->thrid,i,bus);
+                                fprintf(logAll, "%d\t %d\t 0\t R\t %d\t %d\n",get_time()-START_TIME,thr_data->thrid,i,bus+1);
                                 break; // Exit the search of a seat if reservation is done
                             }
                         }
@@ -133,7 +133,7 @@ void *pass_func(void* arg){
                     BUSES[thr_data->reserveds[i].tour][thr_data->reserveds[i].seat] = 0;
                     pthread_mutex_unlock(&passlocks[thr_data->thrid]);
                     isCancelled = 1;
-                    fprintf(logAll,"%d\t %d\t 0\t C\t %d\t %d\n",get_time()-START?TIME,thr_data->thrid,thr_data->reserveds[i].seat,thr_data->reserveds[i].tour);
+                    fprintf(logAll,"%d\t %d\t 0\t C\t %d\t %d\n",get_time()-START?TIME,thr_data->thrid,thr_data->reserveds[i].seat,thr_data->reserveds[i].tour+1);
                     break;
                 }
             }
@@ -152,13 +152,13 @@ void *pass_func(void* arg){
             int t;
             if(thr_data->tickets!=NULL){
                 s = thr_data->tickets->seat;
-                t = thr_data->tickets->tour;
+                t = thr_data->tickets->tour+1;
             }else if(thr_data->reserveds[1]!=NULL){
                 s = thr_data->reserveds[1].seat;
-                t = thr_data->reserveds[1].tour;
+                t = thr_data->reserveds[1].tour+1;
             }else if(thr_data->reserveds[0]!=NULL){
                 s = thr_data->reserveds[0].seat;
-                t = thr_data->reserveds[0].tour;
+                t = thr_data->reserveds[0].tour+1;
             }else{
                 s = 0;
                 t = 0;
@@ -174,7 +174,7 @@ void *pass_func(void* arg){
                     addTicket(thr_data,i,bus);
                     pthread_mutex_unlock(&passlocks[thr_data->thrid]);
                     // LOG
-                    fprintf(logAll,"%d\t %d\t 0\t V\t %d\t %d\n")
+                    fprintf(logAll,"%d\t %d\t 0\t B\t %d\t %d\n",get_time()-START_TIME,thr_data->thrid,i,bus+1);
                     pthread_mutex_unlock(&seatlocks[bus][i]);
                     isBought = 1;
                     break;
@@ -293,8 +293,8 @@ int main(int argc, char** argv){
                         pass_data[i].reserveds[j].time = 0;
                         BUSES[res.tour][res.seat] = 0;
                         pthread_mutex_unlock(&(passlocks[i]));
-                        printf("Reservation time is up. The ticket is cancelled. Passenger: %d Tour: %d, Seat: %d\n",pass_data[i]->thrid,res.tour,res.seat);
-                        printf("The seat %d in tour %d is now empty.\n",res.seat,res.tour);
+                        printf("Reservation time is up. The ticket is cancelled. Passenger: %d Tour: %d, Seat: %d\n",pass_data[i]->thrid,res.tour+1,res.seat);
+                        printf("The seat %d in tour %d is now empty.\n",res.seat,res.tour+1);
                         /*
                         res.tour = 0;
                         res.ticket = 0;
@@ -307,8 +307,8 @@ int main(int argc, char** argv){
         // LOG DAY SUMMARY
         fprintf(logAll,"-------END OF DAY %d------\n",current_day);
         fprintf(logSummary,"Reserved Seats:\n");
-        for(int i=1; i<=NUM_TOURS; i++){
-            fprintf(logSummary,"Tour %d:"i);
+        for(int i=0; i<NUM_TOURS; i++){
+            fprintf(logSummary,"Tour %d:",i+1);
             for(int j=0; j<NUM_PASS; j++){
                 reserve_t res1 = pass_data[j].reserveds[0];
                 if(res1!=NULL && res1.tour==i){
@@ -323,8 +323,8 @@ int main(int argc, char** argv){
             fprintf(logSummary,"\n");
         }
         fprintf(logSummary,"Bought Seats:\n");
-        for(int i=1; i<=NUM_TOURS; i++){
-            fprintf(logSummary,"Tour %d:"i);
+        for(int i=0; i<NUM_TOURS; i++){
+            fprintf(logSummary,"Tour %d:",i+1);
             for(int j=0; j<NUM_PASS; j++){
                 ticket_t *ticks = pass_data[j].tickets;
                 while(ticks!=NULL){
