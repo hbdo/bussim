@@ -47,14 +47,25 @@ void addTicket(pass_data_t *p, int s, int t){
     p->tickets = newTicket;
 }
 
-void removeTicket(pass_data_t *p){
+ticket_t removeTicket(pass_data_t *p){
+    ticket_t result;
+    result.seat = -1;
+    result.tour = -1;
     if(p->tickets != NULL){
+        
+        p->tickets = p->tickets->next;
+        result.seat = p->tickets->seat;
+        result.tour = p->tickets->seat;
+        /*
         ticket_t *newT = NULL;
         newT->next = p->tickets->next;
         newT->seat = p->tickets->seat;
         newT->tour = p->tickets->tour;
         p->tickets = newT;
+        */
     }
+    return result;
+
 }
 
 int NUM_PASS, NUM_AGENTS;
@@ -113,21 +124,49 @@ void *pass_func(void* arg){
                 }
             }
         } else if(action <= 60){ // CANCEL
-            
+            int isCancelled = 0;
             for(int i =0; i<2; i++){
-                // ADD CANCELLATION OF BOUGHT TICKETS
-                if(!(thr_data->reserveds[i].time == 0.0)){
+                
+                if(!(thr_data->reserveds[i].time == 0.0) && (pthread_mutex_trylock(&passlocks[thr_data->thrid]) == 0)){
                     thr_data->reserveds[i].time = 0;
                     BUSES[thr_data->reserveds[i].tour][thr_data->reserveds[i].seat] = 0;
+                    pthread_mutex_unlock(&passlocks[thr_data->thrid]);
+                    isCancelled = 1;
                     fprintf(logAll,"The seat %d from tour %d is cancelled for passenger %d.\n",thr_data->reserveds[i].seat,thr_data->reserveds[i].tour,thr_data->thrid);
                     break;
                 }
             }
+            if(!isCancelled){
+                pthread_mutex_lock(&passlocks[thr_data->thrid]);
+                ticket_t cancelled = removeTicket(thr_data);
+                pthread_mutex_lock(&seatlocks[cancelled.tour][cancelled.seat]);
+                BUSES[cancelled.tour][cancelled.seat] = 0;
+                pthread_mutex_unlock(&seatlocks[cancelled.tour][cancelled.seat]);
+                pthread_mutex_unlock(&passlocks[thr_data->thrid]);
+            }
+
         } else if(action <= 80){ // VIEW
             // WHAT TO DO
             fprintf(logAll,"The passenger %d viewed.\n",thr_data->thrid);
         } else { // BUY
+            bus = rand() % NUM_TOURS;
+            int isBought = 0;
+            for(int i= 0; i< NUM_SEATS; i++){
+                if((BUSES[bus][i] == 0) && (pthread_mutex_trylock(&seatlocks[bus][i]) == 0)){
+                    BUSES[bus][i] = thr_data->thrid;
+                    pthread_mutex_lock(&passlocks[thr_data->thrid]);
+                    addTicket(thr_data,i,bus);
+                    pthread_mutex_unlock(&passlocks[thr_data->thrid]);
+                    // LOG
+                    pthread_mutex_unlock(&seatlocks[bus][i]);
+                    isBought = 1;
+                    break;
+                }
+            }
 
+            if(!isBought){
+                // wait on cond
+            }
         }
     }
     
@@ -230,13 +269,15 @@ int main(int argc, char** argv){
         fprintf(logAll,"----------DAY %d----------\n",current_day);
         fprintf(logSummary,"----------DAY %d----------\n",current_day);
         while(get_time() - START_TIME <= current_day*PERIOD){
-            // Cancle invalid reserved tickets
+            // Cancel invalid reserved tickets
             for(int i = 0; i < NUM_PASS; i++){
                 for(int j = 0; j < 2; j++){
                     if(pass_data[i].reserveds[j].time - get_time() > PERIOD){
+                        pthread_mutex_lock(&(passlocks[i]));
                         reserve_t res = pass_data[i].reserveds[j];
-                        res.time = 0;
+                        pass_data[i].reserveds[j].time = 0;
                         BUSES[res.tour][res.seat] = 0;
+                        pthread_mutex_unlock(&(passlocks[i]));
                         fprintf(logAll,"Reservation time is up. The ticket is cancelled. Passenger: %d Tour: %d, Seat: %d\n",pass_data[i]->thrid,res.tour,res.seat);
                         fprintf(logAll,"The seat %d in tour %d is now empty.\n",res.seat,res.tour);
                         /*
