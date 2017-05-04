@@ -22,6 +22,7 @@ typedef struct _pass_data_t {
     int thrid;
     reserve_t reserveds[2];
     int isRunning;
+    ticket_t* tickets;
     /*
     * Add important data of threads
     */
@@ -34,6 +35,24 @@ typedef struct _agent_data_t {
     * Add important data of threads
     */
 } agent_data_t;
+
+void addTicket(pass_data_t *p, int s, int t){
+    ticket_t *newTicket = (ticket_t*) malloc(sizeof(ticket_t));
+    newTicket->seat = s;
+    newTicket->tour = t;
+    newTicket->next = (p->tickets);
+    p->tickets = newTicket;
+}
+
+void removeTicket(pass_data_t *p){
+    if(p->tickets != NULL){
+        ticket_t *newT = NULL;
+        newT->next = p->tickets->next;
+        newT->seat = p->tickets->seat;
+        newT->tour = p->tickets->tour;
+        p->tickets = newT;
+    }
+}
 
 int NUM_PASS, NUM_AGENTS;
 int NUM_TOURS = 1;
@@ -65,14 +84,34 @@ double get_time() {
 void *pass_func(void* arg){
     pass_data_t* thr_data = (pass_data_t*) arg;
     int action = rand() % 100;
-    int bus = rand() % NUM_TOURS;
-
+    int bus, seat;
     while(get_time() - START_TIME <= NUM_DAYS*PERIOD){
         if(action <= 40){ // RESERVE
-
+            for(int slot=0; slot<2; slot++){
+                if(thr_data->reserveds[slot].time == 0.0 && (pthread_mutex_trylock(&passlocks[thr_data->thrid]) == 0)){
+                    bus = rand() % NUM_TOURS;
+                    for(int i=0; i< NUM_SEATS; i++){
+                        if(BUSES[bus][i] == 0){
+                            if(pthread_mutex_trylock(&(seatlocks[bus][i]))){
+                                BUSES[bus][i] = thr_data->thrid;
+                                thr_data->reserveds[slot].time = get_time();
+                                thr_data->reserveds[slot].tour = bus;
+                                thr_data->reserveds[slot].seat = i;
+                                pthread_mutex_unlock(&(seatlocks[bus][i]));
+                                // LOG RESERVATION ACTION HERE
+                                
+                                break; // Exit the search of a seat if reservation is done
+                            }
+                        }
+                    }
+                pthread_mutex_unlock(&passlocks[thr_data->thrid]);
+                break; // If reserved anything, exit the loop;
+                }
+            }
         } else if(action <= 60){ // CANCEL
             
             for(int i =0; i<2; i++){
+                // ADD CANCELLATION OF BOUGHT TICKETS
                 if(!(thr_data->reserveds[i].time == 0.0)){
                     thr_data->reserveds[i].time = 0;
                     BUSES[thr_data->reserveds[i].tour][thr_data->reserveds[i].seat] = 0;
@@ -153,6 +192,17 @@ int main(int argc, char** argv){
     for(int i =0; i< NUM_TOURS; i++){
         seatlocks[i] = (pthread_mutex_t*) malloc(sizeof(pthread_mutex_t) * NUM_SEATS);
     }
+
+    for(int i=0; i< NUM_PASS; i++){
+        pthread_mutex_init(&(passlocks[i]), NULL);
+    }
+
+    for(int i=0; i< NUM_TOURS; i++){
+        for(int j=0; j< NUM_SEATS; j++){
+            pthread_mutex_init(&(seatlocks[i][j]), NULL);
+        }
+    }
+
 
     int current_day = 1;
     START_TIME = get_time();
