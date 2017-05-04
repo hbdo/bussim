@@ -12,24 +12,6 @@ typedef struct _ticket {
     struct _ticket* next;
 } ticket_t;
 
-void addTicket(pass_data_t *p, int s, int t){
-    ticket_t *newTicket = (ticket_t*) malloc(sizeof(ticket_t));
-    newTicket->seat = s;
-    newTicket->tour = t;
-    newTicket->next = p->tickets;
-    p->tickets = newTicket;
-}
-
-void removeTicket(pass_data_t *p){
-    if(p->tickets != NULL){
-        ticket_t *newT = NULL;
-        newT->next = p->tickets->next;
-        newT->seat = p->tickets->seat;
-        newT->tour = p->tickets->tour;
-        p->tickets = newT;
-    }
-}
-
 typedef struct _reserve_t {
     double time; // When ticket is reserved. 0 if reserved slot is available
     int tour;
@@ -40,7 +22,7 @@ typedef struct _pass_data_t {
     int thrid;
     reserve_t reserveds[2];
     int isRunning;
-    ticket_t bought;
+    ticket_t* tickets;
     /*
     * Add important data of threads
     */
@@ -53,6 +35,24 @@ typedef struct _agent_data_t {
     * Add important data of threads
     */
 } agent_data_t;
+
+void addTicket(pass_data_t *p, int s, int t){
+    ticket_t *newTicket = (ticket_t*) malloc(sizeof(ticket_t));
+    newTicket->seat = s;
+    newTicket->tour = t;
+    newTicket->next = (p->tickets);
+    p->tickets = newTicket;
+}
+
+void removeTicket(pass_data_t *p){
+    if(p->tickets != NULL){
+        ticket_t *newT = NULL;
+        newT->next = p->tickets->next;
+        newT->seat = p->tickets->seat;
+        newT->tour = p->tickets->tour;
+        p->tickets = newT;
+    }
+}
 
 int NUM_PASS, NUM_AGENTS;
 int NUM_TOURS = 1;
@@ -88,7 +88,7 @@ void *pass_func(void* arg){
     while(get_time() - START_TIME <= NUM_DAYS*PERIOD){
         if(action <= 40){ // RESERVE
             for(int slot=0; slot<2; slot++){
-                if(thr_data->reserveds[slot].time == 0.0 && (pthread_MUTEX_trylock(&passlocks[thr_data->thrid]) == 0)){
+                if(thr_data->reserveds[slot].time == 0.0 && (pthread_mutex_trylock(&passlocks[thr_data->thrid]) == 0)){
                     bus = rand() % NUM_TOURS;
                     for(int i=0; i< NUM_SEATS; i++){
                         if(BUSES[bus][i] == 0){
