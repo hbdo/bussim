@@ -1,5 +1,4 @@
-# bussim
+# Black Sea Tour
 
 Comp 304 - Operating Systems Project
-Black Sea Tour
 
