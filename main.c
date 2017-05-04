@@ -41,7 +41,7 @@ typedef struct _agent_data_t {
 } agent_data_t;
 
 void addTicket(pass_data_t *p, int s, int t){
-    ticket_t *newTicket = (ticket_t*) calloc(sizeof(ticket_t));
+    ticket_t *newTicket = (ticket_t*) calloc(1,sizeof(ticket_t));
     newTicket->seat = s;
     newTicket->tour = t;
     newTicket->next = (p->tickets);
@@ -240,20 +240,20 @@ int main(int argc, char** argv){
 
     srand((unsigned) SEED);
 
-    PASSENGERS = (pthread_t*) calloc(sizeof(pthread_t) * NUM_PASS);
-    AGENTS = (pthread_t*) calloc(sizeof(pthread_t) * NUM_AGENTS);
-    pass_data = (pass_data_t*) calloc(sizeof(pass_data_t) * NUM_PASS);
-    agent_data = (agent_data_t*) calloc(sizeof(agent_data_t) * NUM_AGENTS);
+    PASSENGERS = (pthread_t*) calloc(NUM_PASS,sizeof(pthread_t));
+    AGENTS = (pthread_t*) calloc(NUM_AGENTS,sizeof(pthread_t));
+    pass_data = (pass_data_t*) calloc(NUM_PASS,sizeof(pass_data_t));
+    agent_data = (agent_data_t*) calloc(NUM_AGENTS,sizeof(agent_data_t));
 
-    BUSES = (int**) calloc(sizeof(int*) * NUM_TOURS);
+    BUSES = (int**) calloc(NUM_TOURS,sizeof(int*));
     for(int i =0; i< NUM_TOURS; i++){
-        BUSES[i] = (int*) calloc(sizeof(int) * NUM_SEATS);
+        BUSES[i] = (int*) calloc(NUM_SEATS,sizeof(int));
     }
 
-    passlocks = (pthread_mutex_t*) calloc(sizeof(pthread_mutex_t) * NUM_PASS);
-    seatlocks = (pthread_mutex_t**) calloc(sizeof(pthread_mutex_t*) * NUM_TOURS);
+    passlocks = (pthread_mutex_t*) calloc(NUM_PASS,sizeof(pthread_mutex_t));
+    seatlocks = (pthread_mutex_t**) calloc(NUM_TOURS,sizeof(pthread_mutex_t*));
     for(int i =0; i< NUM_TOURS; i++){
-        seatlocks[i] = (pthread_mutex_t*) calloc(sizeof(pthread_mutex_t) * NUM_SEATS);
+        seatlocks[i] = (pthread_mutex_t*) calloc(NUM_SEATS,sizeof(pthread_mutex_t));
     }
 
     for(int i=0; i< NUM_PASS; i++){
