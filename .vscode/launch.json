@@ -6,7 +6,7 @@
             "type": "cppdbg",
             "request": "launch",
             "program": "${workspaceRoot}/main",
-            "args": ["-p","10","-a","2"],
+            "args": ["-p","5","-a","2"],
             "stopAtEntry": false,
             "cwd": "${workspaceRoot}",
             "environment": [],

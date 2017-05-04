@@ -4,11 +4,10 @@
 #include "pthread.h"
 #include "sys/time.h"
 #define MATCH(s) (!strcmp(argv[ac], (s)))
-#define PERIOD 5.0
+#define PERIOD 3.0
 
 FILE *logSummary;
 FILE *logAll;
-//LOG FILES
 
 typedef struct _ticket {
     int seat;
@@ -54,9 +53,10 @@ ticket_t removeTicket(pass_data_t *p){
     result.tour = -1;
     if(p->tickets != NULL){
         
-        p->tickets = p->tickets->next;
         result.seat = p->tickets->seat;
-        result.tour = p->tickets->seat;
+        result.tour = p->tickets->tour;
+        p->tickets = p->tickets->next;
+        
         /*
         ticket_t *newT = NULL;
         newT->next = p->tickets->next;
@@ -72,9 +72,10 @@ ticket_t removeTicket(pass_data_t *p){
 int NUM_PASS, NUM_AGENTS;
 int NUM_TOURS = 1;
 int NUM_SEATS = 10;
-int NUM_DAYS = 4;
+int NUM_DAYS = 2;
 int SEED = 1;
 double START_TIME = 0.0;
+int* LOGFLAGS;
 
 pthread_t *PASSENGERS;
 pthread_t *AGENTS;
@@ -98,92 +99,109 @@ double get_time() {
 
 void *pass_func(void* arg){
     pass_data_t* thr_data = (pass_data_t*) arg;
-    int action = rand() % 100;
+    
     int bus, seat;
-    while(get_time() - START_TIME <= NUM_DAYS*PERIOD){
-        if(action <= 40){ // RESERVE
-            for(int slot=0; slot<2; slot++){
-                if(thr_data->reserveds[slot].time == 0.0 && (pthread_mutex_trylock(&passlocks[thr_data->thrid]) == 0)){
-                    bus = rand() % NUM_TOURS;
-                    for(int i=0; i< NUM_SEATS; i++){
-                        if(BUSES[bus][i] == 0){
-                            if(pthread_mutex_trylock(&(seatlocks[bus][i]))){
-                                BUSES[bus][i] = thr_data->thrid;
-                                
-                                thr_data->reserveds[slot].time = get_time();
-                                thr_data->reserveds[slot].tour = bus;
-                                thr_data->reserveds[slot].seat = i;
-                                pthread_mutex_unlock(&(seatlocks[bus][i]));
-                                // LOG RESERVATION ACTION HERE
-                                fprintf(logAll, "%d\t %d\t 0\t R\t %d\t %d\n",get_time()-START_TIME,thr_data->thrid,i,bus+1);
-                                break; // Exit the search of a seat if reservation is done
+
+    while((get_time() - START_TIME <= NUM_DAYS*PERIOD)){
+        if(LOGFLAGS[0]){
+            LOGFLAGS[1+thr_data->thrid] = 1;
+            int action = rand() % 100;
+            int isReserved = 0;
+            if(action <= 40){ // RESERVE
+                if((pthread_mutex_trylock(&passlocks[thr_data->thrid]) == 0)){
+                    for(int slot=0; slot<2; slot++){
+                        if(thr_data->reserveds[slot].time == 0.0){
+                            bus = rand() % NUM_TOURS;
+                            for(int i=0; i< NUM_SEATS && !isReserved; i++){
+                                if(pthread_mutex_trylock(&(seatlocks[bus][i])) == 0){
+                                    if(BUSES[bus][i] == 0){
+                                        BUSES[bus][i] = thr_data->thrid+1;
+                                        
+                                        thr_data->reserveds[slot].time = get_time();
+                                        thr_data->reserveds[slot].tour = bus;
+                                        thr_data->reserveds[slot].seat = i;                                        
+                                        // LOG RESERVATION ACTION HERE
+                                        fprintf(logAll, "%d\t %d\t 0\t R\t %d\t %d\n",get_time()-START_TIME,thr_data->thrid,i,bus+1);
+                                        isReserved = 1;
+                                        slot = 2; // BREAK THE SLOT LOOP
+                                    } 
+                                    pthread_mutex_unlock(&(seatlocks[bus][i]));
+                                }
                             }
                         }
                     }
-                pthread_mutex_unlock(&passlocks[thr_data->thrid]);
-                break; // If reserved anything, exit the loop;
-                }
-            }
-        } else if(action <= 60){ // CANCEL
-            int isCancelled = 0;
-            for(int i =0; i<2; i++){
-                
-                if(!(thr_data->reserveds[i].time == 0.0) && (pthread_mutex_trylock(&passlocks[thr_data->thrid]) == 0)){
-                    thr_data->reserveds[i].time = 0;
-                    BUSES[thr_data->reserveds[i].tour][thr_data->reserveds[i].seat] = 0;
                     pthread_mutex_unlock(&passlocks[thr_data->thrid]);
-                    isCancelled = 1;
-                    fprintf(logAll,"%d\t %d\t 0\t C\t %d\t %d\n",get_time()-START_TIME,thr_data->thrid,thr_data->reserveds[i].seat,thr_data->reserveds[i].tour+1);
-                    break;
                 }
-            }
-            if(!isCancelled){
-                pthread_mutex_lock(&passlocks[thr_data->thrid]);
-                ticket_t cancelled = removeTicket(thr_data);
-                pthread_mutex_lock(&seatlocks[cancelled.tour][cancelled.seat]);
-                BUSES[cancelled.tour][cancelled.seat] = 0;
-                pthread_mutex_unlock(&seatlocks[cancelled.tour][cancelled.seat]);
-                pthread_mutex_unlock(&passlocks[thr_data->thrid]);
-            }
-
-        } else if(action <= 80){ // VIEW
-            // WHAT TO DO
-            int s;
-            int t;
-            if(thr_data->tickets!=NULL){
-                s = thr_data->tickets->seat;
-                t = thr_data->tickets->tour+1;
-            }else if(thr_data->reserveds[1]!=NULL){
-                s = thr_data->reserveds[1].seat;
-                t = thr_data->reserveds[1].tour+1;
-            }else if(thr_data->reserveds[0]!=NULL){
-                s = thr_data->reserveds[0].seat;
-                t = thr_data->reserveds[0].tour+1;
-            }else{
-                s = 0;
-                t = 0;
-            }
-            fprintf(logAll,"%d\t %d\t 0\t V\t %d\t %d\n",get_time()-START_TIME,thr_data->thrid,s,t);
-        } else { // BUY
-            bus = rand() % NUM_TOURS;
-            int isBought = 0;
-            for(int i= 0; i< NUM_SEATS; i++){
-                if((BUSES[bus][i] == 0) && (pthread_mutex_trylock(&seatlocks[bus][i]) == 0)){
-                    BUSES[bus][i] = thr_data->thrid;
+            } else if(action <= 60){ // CANCEL
+                int isCancelled = 0;
+                for(int i =0; i<2; i++){
+                    
+                    if((thr_data->reserveds[i].time != 0.0)){ 
+                        if(pthread_mutex_trylock(&passlocks[thr_data->thrid]) == 0){
+                            thr_data->reserveds[i].time = 0;
+                            BUSES[thr_data->reserveds[i].tour][thr_data->reserveds[i].seat] = 0;
+                            pthread_mutex_unlock(&passlocks[thr_data->thrid]);
+                            isCancelled = 1;
+                            fprintf(logAll,"%d\t %d\t 0\t C\t %d\t %d\n",get_time()-START_TIME,thr_data->thrid,thr_data->reserveds[i].seat,thr_data->reserveds[i].tour+1);
+                            break;
+                        }
+                    }
+                }
+                if(!isCancelled){
                     pthread_mutex_lock(&passlocks[thr_data->thrid]);
-                    addTicket(thr_data,i,bus);
+                    ticket_t cancelled = removeTicket(thr_data);
+                    if(cancelled.tour != -1){
+                        //pthread_mutex_lock(&(seatlocks[cancelled.tour][cancelled.seat]));
+                        BUSES[cancelled.tour][cancelled.seat] = 0;
+                        fprintf(logAll,"%d\t %d\t 0\t C\t %d\t %d\n",get_time()-START_TIME,thr_data->thrid,cancelled.seat,cancelled.tour+1);
+                        //pthread_mutex_unlock(&(seatlocks[cancelled.tour][cancelled.seat]));
+                    }
                     pthread_mutex_unlock(&passlocks[thr_data->thrid]);
-                    // LOG
-                    fprintf(logAll,"%d\t %d\t 0\t B\t %d\t %d\n",get_time()-START_TIME,thr_data->thrid,i,bus+1);
-                    pthread_mutex_unlock(&seatlocks[bus][i]);
-                    isBought = 1;
-                    break;
+                }
+
+            } else if(action <= 80){ // VIEW
+                
+                // WHAT TO DO
+                int s;
+                int t;
+                if(thr_data->tickets != NULL){
+                    s = thr_data->tickets->seat;
+                    t = thr_data->tickets->tour+1;
+                }else if(thr_data->reserveds[1].time !=0.0){
+                    s = thr_data->reserveds[1].seat;
+                    t = thr_data->reserveds[1].tour+1;
+                }else if(thr_data->reserveds[0].time !=0.0){
+                    s = thr_data->reserveds[0].seat;
+                    t = thr_data->reserveds[0].tour+1;
+                }else{
+                    s = 0;
+                    t = 0;
+                }
+            fprintf(logAll,"%d\t %d\t 0\t V\t %d\t %d\n",get_time()-START_TIME,thr_data->thrid,s,t);
+            } else { // BUY
+                bus = rand() % NUM_TOURS;
+                int isBought = 0;
+                for(int i= 0; i< NUM_SEATS && !isBought; i++){
+                    if((pthread_mutex_trylock(&seatlocks[bus][i]) == 0)){
+                        if(BUSES[bus][i] == 0){
+                            BUSES[bus][i] = thr_data->thrid+1;
+                            pthread_mutex_lock(&passlocks[thr_data->thrid]);
+                            addTicket(thr_data,i,bus);
+                            pthread_mutex_unlock(&passlocks[thr_data->thrid]);
+                            fprintf(logAll,"%d\t %d\t 0\t B\t %d\t %d\n",get_time()-START_TIME,thr_data->thrid,i,bus+1);
+                            isBought = 1;
+                        }
+
+                        pthread_mutex_unlock(&seatlocks[bus][i]);
+                    }
+                }
+
+                if(!isBought){
+                    // wait on cond
                 }
             }
 
-            if(!isBought){
-                // wait on cond
-            }
+            LOGFLAGS[1+thr_data->thrid] = 0;
         }
     }
     
@@ -192,21 +210,27 @@ void *pass_func(void* arg){
 
 void *agent_func(void* arg){
     agent_data_t* thr_data = (agent_data_t*) arg;
-    int action = rand() % 100;
-    int bus = rand() % NUM_TOURS;
-
-    if(action <= 40){ //reserve
-
-    } else if(action <= 60){ //cancel
-
-    } else if(action <= 80){ //view
-        
-    } else { //buy
-        
-    }
-
     printf("Agent %d is running\n", thr_data->thrid);
-   
+
+    while((get_time() - START_TIME <= NUM_DAYS*PERIOD)){
+        if(LOGFLAGS[0]){
+            LOGFLAGS[1+NUM_PASS+thr_data->thrid] = 1;
+            int action = rand() % 100;
+            int bus = rand() % NUM_TOURS;
+
+            if(action <= 40){
+
+            } else if(action <= 60){
+
+            } else if(action <= 80){
+                
+            } else {
+                
+            }
+
+            LOGFLAGS[1+NUM_PASS+thr_data->thrid] = 0;
+        }
+    }
 }
 
 int main(int argc, char** argv){
@@ -240,6 +264,14 @@ int main(int argc, char** argv){
 
     srand((unsigned) SEED);
 
+    logSummary = fopen("summaryLog.txt", "w");
+    logAll = fopen("allLog.txt","w");
+
+    LOGFLAGS = calloc(1+NUM_PASS+NUM_AGENTS, sizeof(int));
+    for(int i=0; i< 1+NUM_PASS+NUM_AGENTS; i++){
+        LOGFLAGS[i] = 1;
+    }
+
     PASSENGERS = (pthread_t*) calloc(NUM_PASS,sizeof(pthread_t));
     AGENTS = (pthread_t*) calloc(NUM_AGENTS,sizeof(pthread_t));
     pass_data = (pass_data_t*) calloc(NUM_PASS,sizeof(pass_data_t));
@@ -270,14 +302,16 @@ int main(int argc, char** argv){
     int current_day = 1;
     START_TIME = get_time();
 
-    for(int i=1; i<=NUM_PASS;i++){
+    for(int i=0; i<NUM_PASS;i++){
         pass_data[i].thrid = i;
         pthread_create(&PASSENGERS[i], NULL, pass_func, &pass_data[i]);
+        fprintf(logAll,"The passenger %d is created.\n",i+1);
     }
 
-    for(int i=1; i<=NUM_AGENTS;i++){
+    for(int i=0; i<NUM_AGENTS;i++){
         agent_data[i].thrid = i;
         pthread_create(&AGENTS[i], NULL, agent_func, &agent_data[i]);
+        fprintf(logAll,"The agent %d is created.\n",i+1);
     }
 
     // SIMULATION
@@ -293,32 +327,39 @@ int main(int argc, char** argv){
                         pass_data[i].reserveds[j].time = 0;
                         BUSES[res.tour][res.seat] = 0;
                         pthread_mutex_unlock(&(passlocks[i]));
-                        printf("Reservation time is up. The ticket is cancelled. Passenger: %d Tour: %d, Seat: %d\n",pass_data[i]->thrid,res.tour+1,res.seat);
-                        printf("The seat %d in tour %d is now empty.\n",res.seat,res.tour+1);
-                        /*
-                        res.tour = 0;
-                        res.ticket = 0;
-                        */
+
+                        fprintf(logAll,"Reservation time is up. The ticket is cancelled. Passenger: %d Tour: %d, Seat: %d\n",pass_data[i].thrid,res.tour,res.seat);
+                        fprintf(logAll,"The seat %d in tour %d is now empty.\n",res.seat,res.tour);
                     }
                 }
             }
         }
 
         // LOG DAY SUMMARY
+        LOGFLAGS[0] = 0;
+        while(1){
+            int stopped = 0;
+            for(int i = 1; i< 1+NUM_PASS+NUM_AGENTS;i++){
+                stopped = stopped || LOGFLAGS[i];
+            }
+            if(!stopped){
+                break;
+            }
+        }
+        
         fprintf(logAll,"-------END OF DAY %d------\n",current_day);
         fprintf(logSummary,"Reserved Seats:\n");
         for(int i=0; i<NUM_TOURS; i++){
             fprintf(logSummary,"Tour %d:",i+1);
             for(int j=0; j<NUM_PASS; j++){
                 reserve_t res1 = pass_data[j].reserveds[0];
-                if(res1!=NULL && res1.tour==i){
-                    fprintf(logSummary," %d",res1.seat);
-                    reserve_t res2 = pass_data[j].reserveds[1];
-                    if(res2!=NULL && res2.tour==i){
-                        fprintf(logSummary," %d",res1.seat);
-                    }
+                if((res1.time != 0) && (res1.tour==i)){
+                    fprintf(logSummary," (%d_%d)",j+1,res1.seat);
                 }
-                
+                reserve_t res2 = pass_data[j].reserveds[1];
+                if((res2.time != 0) && res2.tour==i){
+                    fprintf(logSummary," (%d_%d)",j+1,res2.seat);
+                }
             }
             fprintf(logSummary,"\n");
         }
@@ -326,10 +367,11 @@ int main(int argc, char** argv){
         for(int i=0; i<NUM_TOURS; i++){
             fprintf(logSummary,"Tour %d:",i+1);
             for(int j=0; j<NUM_PASS; j++){
-                ticket_t *ticks = pass_data[j].tickets;
+
+                ticket_t* ticks = pass_data[j].tickets;
                 while(ticks!=NULL){
                     if(ticks->tour==i){
-                        fprintf(logSummary," %d",ticks->seat);
+                        fprintf(logSummary," (%d_%d)",j+1,ticks->seat);
                     }
                     ticks = ticks->next;
                 }
@@ -351,6 +393,7 @@ int main(int argc, char** argv){
         }
         fprintf(logSummary,"\n");
         fprintf(logSummary,"-------END OF DAY %d------\n",current_day);
+        LOGFLAGS[0] = 1;
         current_day++;
     }
 
@@ -362,6 +405,9 @@ int main(int argc, char** argv){
     for(int i=0; i<NUM_AGENTS;i++){
         pthread_join(AGENTS[i], NULL);
     }
-    
+
+    fclose(logSummary);
+    fclose(logAll);
+
     return 0;
 }
